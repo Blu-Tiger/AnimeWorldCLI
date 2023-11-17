@@ -26,12 +26,13 @@ from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
 from docopt import docopt
 
-basepath = os.path.dirname(os.path.abspath("./libmpv/mpv-1.dll"))
+basepath = os.path.dirname(os.path.abspath("./libmpv/mpv-2.dll"))
+basepath2 = os.path.dirname(os.path.abspath(__file__))
 print(basepath)
-os.environ['PATH'] = basepath + os.pathsep + os.environ['PATH']
+os.environ['PATH'] = basepath + os.pathsep + basepath2 + os.pathsep + os.environ['PATH']
 os.environ["LD_LIBRARY_PATH"] = basepath
 
-import mpv   
+import mpv
 
 class AWCLI:
     """
