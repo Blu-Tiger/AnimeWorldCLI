@@ -16,7 +16,7 @@ Options:
     -s, --server SERVER             seleziona server
     -p, --play                      play
     -d, --download                  download (non ancora implementato)
-    -b, --bypass=BYPASS             salta selezione anime, episodio o seraver 
+    -b, --bypass=BYPASS             salta selezione anime, episodio o server 
                                     separati da virgola
                                     (a,e,s o all)
 ```
