@@ -1,5 +1,5 @@
 # AnimeWorldCLI
-A cli to browse and watch anime from AnimeWorld
+A cli to browse and watch anime from [AnimeWorld](https://www.animeworld.so)
 ---
 ```AnimeWorld CLI
 
