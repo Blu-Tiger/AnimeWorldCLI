@@ -23,12 +23,12 @@ import os
 import sys
 import animeworld as aw
 from InquirerPy import inquirer
-from InquirerPy.base.control import Choice
+from InquirerPy.base.control import Choice, Separator
+from InquirerPy.validator import EmptyInputValidator
 from docopt import docopt
 
 basepath = os.path.dirname(os.path.abspath("./libmpv/mpv-2.dll"))
 basepath2 = os.path.dirname(os.path.abspath(__file__))
-print(basepath)
 os.environ['PATH'] = basepath + os.pathsep + basepath2 + os.pathsep + os.environ['PATH']
 os.environ["LD_LIBRARY_PATH"] = basepath
 
@@ -39,7 +39,7 @@ class AWCLI:
         AnimeWorld CLI
     """
     def __init__(self):
-        self.player = mpv.MPV(log_handler=self.my_log, ytdl=False,
+        self.player = mpv.MPV(ytdl=False,
                               input_default_bindings=True,
                               input_vo_keyboard=True)
 
@@ -49,32 +49,35 @@ class AWCLI:
         """
         options = aw.find(query)
         if skip:
-            return options[0]
-        anime = inquirer.fuzzy(
-            message="Risultati:",
+            return aw.Anime(link=options[0]['link'])
+        animefound = inquirer.fuzzy(
+            message="Seleziona Anime:",
             choices=[Choice(name=option["name"],
                             value=option)
                      for option in options],
-            mandatory=True
+            mandatory=True,
+            qmark="🎞️",
+            amark="🎞️",
         ).execute()
-        return anime
+        return aw.Anime(link=animefound['link'])
 
     def seleziona_episodio(self, anime, skip=False):
         """
             Ricerca episodi
         """
-        animelink = aw.Anime(link=anime['link'])
-        episodi = animelink.getEpisodes()
+        episodi = anime.getEpisodes()
         if skip:
             return episodi[0]
         epsodio = inquirer.fuzzy(
-            message="Episodi:",
+            message="Episodio:",
             choices=[Choice(name=option.number, value=option) for option in episodi],
-            mandatory=True
+            mandatory=True,
+            qmark="📺",
+            amark="📺",
         ).execute()
         return epsodio
 
-    def seleziona_server(self, epsodio, skip=False):
+    def seleziona_server(self, epsodio, skip=False, servername=None):
         """
             Ricerca server
         """
@@ -90,6 +93,12 @@ class AWCLI:
             except aw.exceptions.ServerNotSupported:
                 # choices.append(Choice(name=server.name, value=''))
                 continue
+        if servername:
+            server = next((choice for choice in choices if choice.value["name"] == servername), None)
+            if server is None:
+                print(f"Non è stato trovato alcun server con il nome '{servername}'!")
+                sys.exit(1)
+            return server.value
 
         if skip:
             return choices[0].value
@@ -97,8 +106,11 @@ class AWCLI:
         server = inquirer.fuzzy(
             message="Server:",
             choices=choices,
-            mandatory=True
+            mandatory=True,
+            qmark="📡",
+            amark="📡",
         ).execute()
+        
         return server
 
     def my_log(self, loglevel, component, message):
@@ -107,30 +119,84 @@ class AWCLI:
         """
         print(f'[{loglevel}] {component}: {message}')
 
-    def dworplay(self, server, palyordownload=None):
+    def dworplay(self, server, anime, palyordownload=None, timestamp=None):
         """
             Download o play
         """
         link = server["fileLink"]
-
-        match palyordownload:
-            case 'play':
-                self.player.play(link)
-                self.player.wait_for_playback()
-            case 'download':
-                pass
-            case None:
-                ch = inquirer.fuzzy(
-                    message="Server:",
+        
+        if palyordownload is None:
+            palyordownload = inquirer.fuzzy(
+                message="Cosa vuoi fare?",
                     choices=[Choice(name="Guarda", value=1), Choice(name="Scarica", value=2)],
-                    mandatory=True
+                    mandatory=True,
+                    qmark="💻",
+                    amark="💻",
                 ).execute()
-                if ch == 1:
-                    print("Loading...")
-                    self.player.play(link)
-                    self.player.wait_for_playback()
-                elif ch == 2:
-                    pass
+        match palyordownload:
+            case 1:
+                print(f"Sati guardando {anime.getName()}, episodio {server['number']}, su {server['name']}")
+                self.player.play(link)
+                self.player.wait_until_playing()
+                if timestamp:
+                    self.player.seek(timestamp,  reference='absolute')
+                return palyordownload
+                # self.player.wait_for_playback()
+            case 2:
+                return palyordownload
+
+                
+    def change_episode(self, anime, epsodio, server):
+        """
+            Cambia episodio
+        """
+        epsodi = anime.getEpisodes()
+        epsodiocorrente = epsodio
+        animecorrente = anime
+        servercorrente = server
+        while True:
+            timestamp = None
+            num = int(epsodiocorrente.number)
+            choices = [
+                Choice(value=num+1, name=" [Prossimo⪢") if epsodiocorrente.number!=epsodi[-1].number else None,
+                Choice(value=num-1, name="⪡Precedente]") if epsodiocorrente.number!=epsodi[0].number else None,
+                Choice(value=None, name="🔢 Inserisci numero episodio"),
+                Separator(),
+                Choice(value=-1, name="📡 Cambia Server"),
+                Choice(value=-2, name="🔎 Cerca Anime"),
+                Separator(),
+                Choice(value=-3, name="👋 Esci"),
+            ]
+            newep = inquirer.select(
+                message="Cambia episodio:",
+                choices=[choice for choice in choices if choice],
+                default="Prossimo",
+                qmark="📺",
+                amark="",
+            ).execute()
+            match newep:
+                case None:
+                    newep = inquirer.number(
+                        message="Inserisci numero episodio:",
+                        min_allowed=int(epsodi[0].number),
+                        max_allowed=int(epsodi[-1].number),
+                        validate=EmptyInputValidator(),
+                        qmark="📺",
+                        amark="📺",
+                    ).execute()
+                case -1:
+                    servercorrente = self.seleziona_server(epsodio=epsodiocorrente)
+                    timestamp = self.player.time_pos
+                case -2:
+                    query = inquirer.text(message="Cerca anime:", qmark="🔎", amark="🔎").execute()
+                    animecorrente = self.search(query=query)
+                    epsodiocorrente = self.seleziona_episodio(anime=animecorrente)
+                case -3:
+                    sys.exit(0)
+                case _:
+                    epsodiocorrente = epsodi[int(newep)-1]
+            self.dworplay(server=servercorrente, anime=anime, palyordownload=1, timestamp=timestamp)
+            
 
 def main():
     """
@@ -138,20 +204,21 @@ def main():
     """
     awcli = AWCLI()
 
-    arguments = docopt(__doc__, argv=None, help=True, version=None, options_first=False)
+    arguments = docopt(__doc__, argv=None, help=True, version="AnimeWorld CLI 1.0.1", options_first=False)
 
     skipa = False
     skipe = False
     skips = False
     palydownload = None
+    servern = None
 
     if arguments["--play"] is True:
-        palydownload = 'play'
+        palydownload = 1
 
     if arguments["--download"] is True:
-        palydownload = 'download'
+        palydownload = 2
 
-    if arguments["--bypass"] is not None:
+    if arguments["--bypass"]:
         skip = arguments["--bypass"].split(',')
         if skip != '':
             if  'a' not in skip and 'e' not in skip and 's' not in skip:
@@ -168,8 +235,12 @@ def main():
                 skipa = True
                 skipe = True
                 skips = True
+                
+    if arguments["--server"]:
+        servern = arguments["--server"]
+        
 
-    if arguments["--episodio"] is not None:
+    if arguments["--episodio"]:
         if not int(arguments["--episodio"]):
             print("Sintassi numero episodio non corretto!")
             sys.exit(1)
@@ -187,26 +258,24 @@ def main():
             try:
                 if int(arguments["--episodio"])-1 < 0:
                     print("Episodio non valido!")
-                epsodio = aw.Anime(link=anime['link']).getEpisodes()[int(arguments["--episodio"])-1]
+                    sys.exit(1)
+                epsodio = anime.getEpisodes()[int(arguments["--episodio"])-1]
             except IndexError:
-                print("Episodio non trovato!")
+                print(f"Episodio {int(arguments["--episodio"])-1} non trovato!")
                 sys.exit(1)
-            server = awcli.seleziona_server(epsodio=epsodio, skip=skips)
-            awcli.dworplay(server=server, palyordownload=palydownload)
-            
-            
-    if arguments["INPUT"] == []:
-        query = inquirer.text(message="Cerca anime:").execute()
+
+    elif arguments["INPUT"] == []:
+        query = inquirer.text(message="Cerca anime:", qmark="🔎", amark="🔎").execute()
         anime = awcli.search(query=query, skip=skipa)
         epsodio = awcli.seleziona_episodio(anime=anime, skip=skipe)
-        server = awcli.seleziona_server(epsodio=epsodio, skip=skips)
-        awcli.dworplay(server=server, palyordownload=palydownload)
     else:
         anime = awcli.search(query=' '.join(arguments["INPUT"]), skip=skipa)
         epsodio = awcli.seleziona_episodio(anime=anime, skip=skipe)
-        server = awcli.seleziona_server(epsodio=epsodio, skip=skips)
-        awcli.dworplay(server=server, palyordownload=palydownload)
-
+        
+    server = awcli.seleziona_server(epsodio=epsodio, skip=skips, servername=servern)
+    palydownload = awcli.dworplay(server=server, anime=anime, palyordownload=palydownload)
+    if palydownload == 1:
+        awcli.change_episode(anime=anime, epsodio=epsodio, server=server)
 
 if __name__ == "__main__":
     main()
