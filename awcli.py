@@ -208,7 +208,7 @@ def main():
     """
     awcli = AWCLI()
 
-    arguments = docopt(__doc__, argv=None, help=True, version="AnimeWorld CLI 1.0.1", options_first=False)
+    arguments = docopt(__doc__, argv=None, help=True, version="AnimeWorld CLI 1.0.2", options_first=False)
 
     skipa = False
     skipe = False
