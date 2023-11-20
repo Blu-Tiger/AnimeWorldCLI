@@ -9,10 +9,12 @@ Usage:
 
 Options:
     -h  --help                      mostra questo
+    -v, --version                   mostra versione
     -e, --episodio EPISODIO         seleziona numero episodio
     -s, --server SERVER             seleziona server
     -p, --play                      play
     -d, --download                  download
+    --hw                             hentaiworld
     -b, --bypass=BYPASS             salta selezione anime, episodio o seraver 
                                     separati da virgola
                                     (a,e,s o all)
@@ -191,10 +193,12 @@ class AWCLI:
                     query = inquirer.text(message="Cerca anime:", qmark="🔎", amark="🔎").execute()
                     animecorrente = self.search(query=query)
                     epsodiocorrente = self.seleziona_episodio(anime=animecorrente)
+                    servercorrente = self.seleziona_server(epsodio=epsodiocorrente, servername=servercorrente["name"])
                 case -3:
                     sys.exit(0)
                 case _:
                     epsodiocorrente = epsodi[int(newep)-1]
+                    servercorrente = self.seleziona_server(epsodio=epsodiocorrente, servername=servercorrente["name"])
             self.dworplay(server=servercorrente, anime=anime, palyordownload=1, timestamp=timestamp)
             
 
